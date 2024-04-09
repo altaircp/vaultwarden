@@ -5,6 +5,8 @@
 // If you go above 128 it will cause rust-analyzer to fail,
 #![recursion_limit = "87"]
 
+use lambda_web::{is_running_on_lambda, launch_rocket_on_lambda, LambdaError};
+
 // When enabled use MiMalloc as malloc instead of the default malloc
 #[cfg(feature = "enable_mimalloc")]
 use mimalloc::MiMalloc;
@@ -60,7 +62,7 @@ use std::sync::Arc;
 pub use util::is_running_in_container;
 
 #[rocket::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), LambdaError> {
     parse_args();
     launch_info();
 
@@ -476,7 +478,7 @@ async fn create_db_pool() -> db::DbPool {
     }
 }
 
-async fn launch_rocket(pool: db::DbPool, extra_debug: bool) -> Result<(), Error> {
+async fn launch_rocket(pool: db::DbPool, extra_debug: bool) -> Result<(), LambdaError> {
     let basepath = &CONFIG.domain_path();
 
     let mut config = rocket::Config::from(rocket::Config::figment());
@@ -517,7 +519,13 @@ async fn launch_rocket(pool: db::DbPool, extra_debug: bool) -> Result<(), Error>
         CONFIG.shutdown();
     });
 
-    let _ = instance.launch().await?;
+    if is_running_on_lambda() {
+        // Launch on AWS Lambda
+        launch_rocket_on_lambda(instance).await?;
+    } else {
+        // Launch local server
+        let _ = instance.launch().await?;
+    }    
 
     info!("Vaultwarden process exited!");
     Ok(())
