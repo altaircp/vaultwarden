@@ -1,1 +1,1 @@
-docker/Dockerfile.lambda
+docker/Dockerfile.alpine
